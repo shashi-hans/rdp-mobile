@@ -1,0 +1,19 @@
+# systemd user unit for rdpagent. Install with scripts/install-agent.sh, which
+# fills in LISTEN from `tailscale ip -4`.
+[Unit]
+Description=rdp-mobile laptop agent (lock, status, keep-awake)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/rdpagent serve -listen ${LISTEN} -token-file %h/.config/rdpagent/token
+EnvironmentFile=%h/.config/rdpagent/env
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=graphical-session.target

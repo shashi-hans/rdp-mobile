@@ -1,0 +1,129 @@
+diff --git a/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.c b/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.c
+index 1a054b8..d3489d9 100644
+--- a/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.c
++++ b/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.c
+@@ -24,15 +24,24 @@
+ 
+ BOOL android_push_event(freerdp* inst, ANDROID_EVENT* event)
+ {
++	if (!inst || !inst->context || !event)
++		return FALSE;
++
+ 	androidContext* aCtx = (androidContext*)inst->context;
++	if (!aCtx->event_queue)
++		return FALSE;
+ 
++	EnterCriticalSection(&aCtx->event_queue->lock);
+ 	if (aCtx->event_queue->count >= aCtx->event_queue->size)
+ 	{
+ 		size_t new_size = aCtx->event_queue->size;
+ 		do
+ 		{
+ 			if (new_size >= SIZE_MAX - 128ull)
++			{
++				LeaveCriticalSection(&aCtx->event_queue->lock);
+ 				return FALSE;
++			}
+ 
+ 			new_size += 128ull;
+ 		} while (new_size <= aCtx->event_queue->count);
+@@ -40,42 +49,36 @@ BOOL android_push_event(freerdp* inst, ANDROID_EVENT* event)
+ 		    realloc((void*)aCtx->event_queue->events, sizeof(ANDROID_EVENT*) * new_size);
+ 
+ 		if (!new_events)
++		{
++			LeaveCriticalSection(&aCtx->event_queue->lock);
+ 			return FALSE;
++		}
+ 
+ 		aCtx->event_queue->events = new_events;
+ 		aCtx->event_queue->size = new_size;
+ 	}
+ 
+ 	aCtx->event_queue->events[(aCtx->event_queue->count)++] = event;
++	LeaveCriticalSection(&aCtx->event_queue->lock);
+ 	return SetEvent(aCtx->event_queue->isSet);
+ }
+ 
+-static ANDROID_EVENT* android_peek_event(ANDROID_EVENT_QUEUE* queue)
+-{
+-	ANDROID_EVENT* event;
+-
+-	if (queue->count < 1)
+-		return nullptr;
+-
+-	event = queue->events[0];
+-	return event;
+-}
+-
+ static ANDROID_EVENT* android_pop_event(ANDROID_EVENT_QUEUE* queue)
+ {
+-	ANDROID_EVENT* event;
+-
+-	if (queue->count < 1)
+-		return nullptr;
++	ANDROID_EVENT* event = nullptr;
+ 
+-	event = queue->events[0];
+-	(queue->count)--;
+-
+-	for (size_t i = 0; i < queue->count; i++)
++	EnterCriticalSection(&queue->lock);
++	if (queue->count >= 1)
+ 	{
+-		queue->events[i] = queue->events[i + 1];
+-	}
++		event = queue->events[0];
++		(queue->count)--;
+ 
++		for (size_t i = 0; i < (size_t)queue->count; i++)
++		{
++			queue->events[i] = queue->events[i + 1];
++		}
++	}
++	LeaveCriticalSection(&queue->lock);
+ 	return event;
+ }
+ 
+@@ -89,11 +92,11 @@ static BOOL android_process_event(ANDROID_EVENT_QUEUE* queue, freerdp* inst)
+ 	context = inst->context;
+ 	WINPR_ASSERT(context);
+ 
+-	while (android_peek_event(queue))
++	ANDROID_EVENT* event = nullptr;
++	while ((event = android_pop_event(queue)) != nullptr)
+ 	{
+ 		BOOL rc = FALSE;
+ 		androidContext* afc = (androidContext*)context;
+-		ANDROID_EVENT* event = android_pop_event(queue);
+ 
+ 		WINPR_ASSERT(event);
+ 
+@@ -331,6 +334,7 @@ BOOL android_event_queue_init(freerdp* inst)
+ 
+ 	queue->size = 16;
+ 	queue->count = 0;
++	InitializeCriticalSection(&queue->lock);
+ 	queue->isSet = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+ 
+ 	if (!queue->isSet)
+@@ -380,6 +384,7 @@ void android_event_queue_uninit(freerdp* inst)
+ 			queue->count = 0;
+ 		}
+ 
++		DeleteCriticalSection(&queue->lock);
+ 		free(queue);
+ 	}
+ }
+diff --git a/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.h b/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.h
+index ea98624..647ccfc 100644
+--- a/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.h
++++ b/client/Android/Studio/freeRDPCore/src/main/cpp/android_event.h
+@@ -54,6 +54,7 @@ typedef struct
+ 	int count;
+ 	HANDLE isSet;
+ 	ANDROID_EVENT** events;
++	CRITICAL_SECTION lock; /* push runs on Java threads, pop on the FreeRDP thread */
+ } ANDROID_EVENT_QUEUE;
+ 
+ FREERDP_LOCAL BOOL android_push_event(freerdp* inst, ANDROID_EVENT* event);

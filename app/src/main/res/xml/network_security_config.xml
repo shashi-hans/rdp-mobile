@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Plain HTTP is allowed only to 127.0.0.1: the embedded Tailscale node relays
+  that local port to the laptop agent through its WireGuard tunnel.
+  RDP itself runs over TLS and is checked against a pinned certificate.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

@@ -1,0 +1,20 @@
+plugins {
+    id("com.android.library")
+}
+
+android {
+    namespace = "rdpmobile.rdpcore"
+    compileSdk = 36
+    ndkVersion = "29.0.13113456"
+
+    defaultConfig {
+        minSdk = 29
+        consumerProguardFiles("consumer-rules.pro")
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
