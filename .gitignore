@@ -1,0 +1,16 @@
+.gradle/
+build/
+*/build/
+local.properties
+keystore.properties
+*.jks
+*.log
+.idea/
+*.iml
+
+# FreeRDP source is cloned by scripts/fetch-freerdp.sh; native libs are built by scripts/build-native.sh.
+third_party/
+rdpcore/src/main/jniLibs/
+
+# Built by scripts/build-tsbridge.sh.
+app/libs/
